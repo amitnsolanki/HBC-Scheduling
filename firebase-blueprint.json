@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "Signup": {
+      "title": "Signup",
+      "description": "A user's signup for a specific badminton slot.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "number",
+          "description": "The unique ID of the event from the Harvard API."
+        },
+        "uid": {
+          "type": "string",
+          "description": "The Firebase UID of the user who signed up."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the player."
+        },
+        "arrivalTime": {
+          "type": "string",
+          "description": "The time the player plans to arrive (HH:mm format)."
+        },
+        "duration": {
+          "type": "string",
+          "description": "How long the player plans to play."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the signup was created."
+        }
+      },
+      "required": ["eventId", "uid", "name", "arrivalTime", "duration", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile for a badminton player.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "level": {
+          "type": "string",
+          "enum": ["National", "Advanced", "Intermediate-Advanced", "Intermediate", "Intermediate-Beginner", "Beginner"]
+        },
+        "rackets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "weight": { "type": "string", "enum": ["3U", "4U", "5U", "6U", "7U", "8U", ""] },
+              "gripSize": { "type": "string" },
+              "gripType": { "type": "string", "enum": ["Towel", "Tacky", "Dry", ""] },
+              "isCurrent": { "type": "boolean" },
+              "isFavorite": { "type": "boolean" }
+            }
+          }
+        },
+        "shoes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "size": { "type": "string" },
+              "isCurrent": { "type": "boolean" },
+              "isFavorite": { "type": "boolean" }
+            }
+          }
+        },
+        "strings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "tensionMain": { "type": "number" },
+              "tensionCross": { "type": "number" },
+              "isCurrent": { "type": "boolean" },
+              "isFavorite": { "type": "boolean" }
+            }
+          }
+        },
+        "playStyles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "style": { "type": "string", "enum": ["Singles", "Doubles", "Mixed"] },
+              "preference": { "type": "number" },
+              "level": { "type": "string", "enum": ["National", "Advanced", "Intermediate-Advanced", "Intermediate", "Intermediate-Beginner", "Beginner", ""] }
+            }
+          }
+        },
+        "styleOfPlay": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Attacking", "Defensive", "Drive", "Drop", "All around",
+              "Battery Drain", "Controlled", "Strategist", "Brute Force", 
+              "Speedster", "The Wall", "Deceptive", "Smasher", "Net Ninja", "All-Rounder",
+              "Fun to Play", "Collaborative"
+            ]
+          }
+        },
+        "dominantHand": { "type": "string" },
+        "playingSince": { "type": "number" },
+        "homeClub": { "type": "string" },
+        "bio": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "level", "dominantHand", "styleOfPlay", "updatedAt"]
+    },
+    "Gear": {
+      "title": "Gear",
+      "description": "Badminton equipment (rackets, shoes, strings).",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["racket", "shoe", "string"] },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "series": { "type": "string" },
+        "balance": { "type": "string" },
+        "flex": { "type": "string" },
+        "player_level": { "type": "string" },
+        "cushion_technology": { "type": "string" },
+        "gauge_mm": { "type": "number" },
+        "characteristic": { "type": "string" }
+      },
+      "required": ["type", "brand", "model"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Metadata for a 1-on-1 chat between two players.",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "senderId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" }
+          }
+        },
+        "unreadCount": { "type": "object" }
+      },
+      "required": ["participants", "unreadCount"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message in a chat.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["senderId", "receiverId", "text", "timestamp", "read"]
+    }
+  },
+  "firestore": {
+    "signups": {
+      "schema": {
+        "$ref": "#/entities/Signup"
+      },
+      "description": "Collection of all signups for badminton events."
+    },
+    "users": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Collection of public user profiles."
+    },
+    "gear": {
+      "schema": {
+        "$ref": "#/entities/Gear"
+      },
+      "description": "Collection of badminton gear for autocomplete."
+    },
+    "chats": {
+      "schema": {
+        "$ref": "#/entities/Chat"
+      },
+      "description": "Collection of 1-on-1 chats. Subcollection 'messages' follows Message schema."
+    }
+  }
+}

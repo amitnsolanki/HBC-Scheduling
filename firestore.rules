@@ -1,0 +1,285 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: signups
+    // Document ID: {userId}_{eventId}
+    // Fields:
+    //   - eventId: number (required) - The ID of the event
+    //   - uid: string (required) - The user's Firebase UID
+    //   - name: string (required, 1-50 chars) - The player's name
+    //   - level: string (required, enum) - Skill level
+    //   - time: string (required, 1-10 chars) - Time they plan to play
+    //   - createdAt: timestamp (required, immutable) - Creation time
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "Neo.Dink@gmail.com" && request.auth.token.email_verified == true) ||
+          (request.auth.token.email == "neo.dink@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    // Domain Validators
+    function isValidSignup(data) {
+      return hasOnlyAllowedFields(['eventId', 'uid', 'name', 'arrivalTime', 'duration', 'createdAt', 'email', 'arrivalDateTimeMillis', 'notifiedAt']) &&
+             data.eventId is number &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
+             data.arrivalTime is string && data.arrivalTime.size() > 0 && data.arrivalTime.size() <= 10 &&
+             (!('arrivalDateTimeMillis' in data) || data.arrivalDateTimeMillis is number) &&
+             (!('notifiedAt' in data) || data.notifiedAt is number) &&
+             data.duration is string && data.duration.size() > 0 && data.duration.size() <= 20 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'level', 'role', 'rackets', 'shoes', 'strings', 'playStyles', 'styleOfPlay', 'dominantHand', 'playingSince', 'homeClub', 'bio', 'updatedAt', 'gender']) &&
+             data.uid is string &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 60 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500000)) &&
+             data.level in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner'] &&
+             (!('role' in data) || data.role in ['admin', 'user']) &&
+             (!('gender' in data) || data.gender in ['Male', 'Female']) &&
+             data.dominantHand in ['Right', 'Left', 'Ambidextrous'] &&
+             data.styleOfPlay is list && data.styleOfPlay.size() > 0 &&
+             (!('rackets' in data) || data.rackets is list) &&
+             (!('shoes' in data) || data.shoes is list) &&
+             (!('strings' in data) || data.strings is list) &&
+             (!('playStyles' in data) || data.playStyles is list) &&
+             (!('playingSince' in data) || data.playingSince is number) &&
+             (!('homeClub' in data) || (data.homeClub is string && data.homeClub.size() <= 100)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000)) &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidChat(data) {
+      return hasOnlyAllowedFields(['participants', 'lastMessage', 'unreadCount']) &&
+             data.participants is list && data.participants.size() == 2 &&
+             request.auth.uid in data.participants &&
+             data.unreadCount is map;
+    }
+
+    function isValidGroup(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.createdBy is string &&
+             data.admins is list &&
+             data.members is list &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidGroupRequest(data) {
+      return data.groupId is string &&
+             data.userId is string &&
+             data.status in ['pending', 'approved', 'declined'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['senderId', 'receiverId', 'text', 'timestamp', 'read']) &&
+             data.senderId == request.auth.uid &&
+             data.receiverId is string &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 5000 &&
+             data.timestamp is timestamp &&
+             data.read is bool;
+    }
+
+    function isValidPlayerAssessment(data) {
+      return hasOnlyAllowedFields(['assessorUid', 'assessedUid', 'assessorLevel', 'assessedLevel', 'singlesLevel', 'doublesLevel', 'mixedLevel', 'assessedStyles', 'suggestedStyles', 'createdAt', 'updatedAt']) &&
+             data.assessorUid is string && data.assessorUid == request.auth.uid &&
+             data.assessedUid is string && data.assessedUid.size() > 0 &&
+             data.assessorLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner', 'Unknown'] &&
+             (!('assessedLevel' in data) || data.assessedLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner']) &&
+             (!('singlesLevel' in data) || data.singlesLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner']) &&
+             (!('doublesLevel' in data) || data.doublesLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner']) &&
+             (!('mixedLevel' in data) || data.mixedLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner']) &&
+             (!('assessedStyles' in data) || data.assessedStyles is list) &&
+             (!('suggestedStyles' in data) || data.suggestedStyles is list) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidGearReview(data) {
+      return hasOnlyAllowedFields(['reviewerUid', 'targetUid', 'reviewerLevel', 'gearType', 'gearId', 'comment', 'createdAt', 'updatedAt']) &&
+             data.reviewerUid is string && data.reviewerUid == request.auth.uid &&
+             data.targetUid is string && data.targetUid.size() > 0 &&
+             data.reviewerLevel in ['National', 'Advanced', 'Intermediate-Advanced', 'Intermediate', 'Intermediate-Beginner', 'Beginner', 'Unknown'] &&
+             data.gearType in ['racket', 'string', 'shoe'] &&
+             data.gearId is string && data.gearId.size() > 0 &&
+             data.comment is string && data.comment.size() > 0 && data.comment.size() <= 500 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /schedule_cache/{monthKey} {
+      allow read: if true;
+      allow write: if true; // Server needs to write to this cache
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /users/{userId} {
+      // Anyone can read public user profiles
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidUserProfile(request.resource.data) && 
+                    ((isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == 'user')) || isAdmin());
+      allow update: if isAuthenticated() && isValidUserProfile(request.resource.data) && 
+                    ((isOwner(userId) && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /signups/{signupId} {
+      // Anyone can read signups to see who is playing
+      allow read: if true;
+      
+      // Only authenticated users can create their own signups
+      // Document ID must be {uid}_{eventId}
+      allow create: if isAuthenticated() && 
+                    isValidSignup(request.resource.data) && 
+                    uidUnchanged() &&
+                    signupId == request.auth.uid + '_' + string(request.resource.data.eventId);
+                    
+      // Only the owner can update their signup
+      allow update: if isAuthenticated() && 
+                    isDocOwner() &&
+                    isValidSignup(request.resource.data) && 
+                    uidNotModified() &&
+                    request.resource.data.eventId == resource.data.eventId && // eventId immutable
+                    request.resource.data.createdAt == resource.data.createdAt; // createdAt immutable
+                    
+      // Only the owner can delete their signup
+      allow delete: if isDocOwner();
+    }
+
+    match /gear/{gearId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /player_assessments/{assessmentId} {
+      allow read: if true;
+      allow write: if true; // TEMPORARY FOR SEEDING
+    }
+
+    match /gear_reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+                    isValidGearReview(request.resource.data) &&
+                    reviewId == request.auth.uid + '_' + request.resource.data.targetUid + '_' + request.resource.data.gearType + '_' + request.resource.data.gearId;
+      allow update: if isAuthenticated() &&
+                    request.auth.uid == resource.data.reviewerUid &&
+                    isValidGearReview(request.resource.data) &&
+                    request.resource.data.reviewerUid == resource.data.reviewerUid &&
+                    request.resource.data.targetUid == resource.data.targetUid &&
+                    request.resource.data.gearType == resource.data.gearType &&
+                    request.resource.data.gearId == resource.data.gearId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.reviewerUid;
+    }
+
+    match /chats/{chatId} {
+      allow get: if isAuthenticated() && chatId.matches('.*' + request.auth.uid + '.*');
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated() && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants && isValidChat(request.resource.data);
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && chatId.matches('.*' + request.auth.uid + '.*');
+        allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+        allow update: if isAuthenticated() && request.auth.uid == resource.data.receiverId && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
+    }
+
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidGroup(request.resource.data) &&
+                    request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && 
+                    (isAdmin() || request.auth.uid in resource.data.admins) &&
+                    isValidGroup(request.resource.data) && 
+                    request.resource.data.createdBy == resource.data.createdBy && // createdBy is immutable
+                    request.resource.data.createdAt == resource.data.createdAt; // createdAt immutable
+      allow delete: if isAuthenticated() && (isAdmin() || request.auth.uid in resource.data.admins);
+
+      match /messages/{messageId} {
+        // Members or global admins can read messages
+        allow read: if isAuthenticated() && 
+                    (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members);
+        // Only members can create messages
+        allow create: if isAuthenticated() && 
+                      (request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members) &&
+                      request.resource.data.senderId == request.auth.uid;
+        // global admins can delete messages
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /group_requests/{requestId} {
+      // Anyone can read requests to see if they've already requested
+      allow read: if isAuthenticated();
+      // Users can create their own requests
+      allow create: if isAuthenticated() && isValidGroupRequest(request.resource.data) &&
+                    request.resource.data.userId == request.auth.uid &&
+                    requestId == request.resource.data.groupId + '_' + request.auth.uid;
+      // Admins or group sub-admins can update the request
+      allow update: if isAuthenticated() && 
+                    (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.admins) &&
+                    isValidGroupRequest(request.resource.data) &&
+                    request.resource.data.groupId == resource.data.groupId &&
+                    request.resource.data.userId == resource.data.userId;
+      // Users can delete their own pending requests, or admins/sub-admins can delete
+      allow delete: if isAuthenticated() &&
+                    (isAdmin() || 
+                     request.auth.uid == resource.data.userId || 
+                     request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.groupId)).data.admins);
+    }
+  }
+}
