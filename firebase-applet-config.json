@@ -1,10 +1,10 @@
 {
   "projectId": "gen-lang-client-0495871927",
   "appId": "1:872294399442:web:0caf878dea0f7d9d79dc0b",
-  "apiKey": "AIzaSyAyoJFjrn1gE1kd7NSoccighIsZyH60yj4",
-  "authDomain": "auth.badmintonschedule.org",
-  "firestoreDatabaseId": "ai-studio-dc60ca61-25d1-4ce7-9473-d0d1991bbea5",
+  "apiKey": "GEMINI KEY",
+  "authDomain": "Website Auth domain",
+  "firestoreDatabaseId": "ID",
   "storageBucket": "gen-lang-client-0495871927.firebasestorage.app",
-  "messagingSenderId": "872294399442",
+  "messagingSenderId": "ID",
   "measurementId": ""
 }
